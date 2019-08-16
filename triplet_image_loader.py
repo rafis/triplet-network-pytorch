@@ -24,6 +24,8 @@ class TripletImageLoader(torch.utils.data.Dataset):
             self.filenamelist.append(line.rstrip('\n'))
         triplets = []
         for line in open(triplets_file_name):
+            if not line.strip():
+                break
             triplets.append((line.split()[0], line.split()[1], line.split()[2])) # anchor, far, close
         self.triplets = triplets
         self.transform = transform
