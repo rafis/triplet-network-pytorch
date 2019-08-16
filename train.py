@@ -1,4 +1,5 @@
 from __future__ import print_function
+
 import argparse
 import os
 import shutil
@@ -27,7 +28,7 @@ parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                     help='SGD momentum (default: 0.5)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
+parser.add_argument('--cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
@@ -39,6 +40,8 @@ parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--name', default='TripletNet', type=str,
                     help='name of experiment')
+parser.add_argument('--visdom', action='store_true', default=False,
+                    help='disable visdom logging')
 
 best_acc = 0
 
@@ -46,12 +49,14 @@ best_acc = 0
 def main():
     global args, best_acc
     args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    args.cuda = args.cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
-    global plotter 
-    plotter = VisdomLinePlotter(env_name=args.name)
+
+    if args.visdom:
+        global plotter
+        plotter = VisdomLinePlotter(env_name=args.name)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     train_loader = torch.utils.data.DataLoader(
@@ -169,10 +174,11 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
                 epoch, batch_idx * len(data1), len(train_loader.dataset),
                 losses.val, losses.avg, 
                 100. * accs.val, 100. * accs.avg, emb_norms.val, emb_norms.avg))
-    # log avg values to somewhere
-    plotter.plot('acc', 'train', epoch, accs.avg)
-    plotter.plot('loss', 'train', epoch, losses.avg)
-    plotter.plot('emb_norms', 'train', epoch, emb_norms.avg)
+    if args.visdom:
+        # log avg values to somewhere
+        plotter.plot('acc', 'train', epoch, accs.avg)
+        plotter.plot('loss', 'train', epoch, losses.avg)
+        plotter.plot('emb_norms', 'train', epoch, emb_norms.avg)
 
 def test(test_loader, tnet, criterion, epoch):
     losses = AverageMeter()
@@ -200,8 +206,9 @@ def test(test_loader, tnet, criterion, epoch):
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {:.2f}%\n'.format(
         losses.avg, 100. * accs.avg))
-    plotter.plot('acc', 'test', epoch, accs.avg)
-    plotter.plot('loss', 'test', epoch, losses.avg)
+    if args.visdom:
+        plotter.plot('acc', 'test', epoch, accs.avg)
+        plotter.plot('loss', 'test', epoch, losses.avg)
     return accs.avg
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
